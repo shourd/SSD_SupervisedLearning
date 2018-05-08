@@ -4,9 +4,9 @@ import keras.utils
 import numpy as np
 
 
-def load_SSD(size):
+def load_SSD(size, folder='data'):
 
-    filelist = glob('data/*.png')
+    filelist = glob('{}/*.png'.format(folder))
     ssd_stack = []
     for fname in filelist:
         ssd = Image.open(fname)

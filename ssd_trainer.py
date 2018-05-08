@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pylab as plt
 import ssd_dataloader
 from os import  environ
+import pickle
 environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # surpresses the warning that CPU isn't used optimally (VX/FMA functionality)
 
 ### TRAINING SETTINGS
@@ -21,6 +22,7 @@ input_shape = (size[0], size[1], 1)
 x_train = ssd_dataloader.load_SSD(size)
 y_train = ssd_dataloader.load_resos(num_classes)
 
+pickle.dump( x_train, open( "SSDs.p", "wb" ) )
 
 ### CREATING THE CNN
 
