@@ -15,6 +15,7 @@ def train_model(data_folder='data', model_name='testModel'):
     """ TRAINING SETTINGS """
     batch_size = 128  # for backprop type
     epochs = 15
+    train_ratio = 0.6  # train / test data
     save_model = True
     print_layer_size = True
 
@@ -23,12 +24,21 @@ def train_model(data_folder='data', model_name='testModel'):
     size = (120, 120)  # target img dimensions
     input_shape = (size[0], size[1], 1)
 
-    x_train = ssd_dataloader.load_SSD(size, data_folder)
-    y_train = ssd_dataloader.load_resos(data_folder)
+    x_data = ssd_dataloader.load_SSD(size, data_folder)
+    y_data = ssd_dataloader.load_resos(data_folder)
 
     # # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
-    y_train = (y_train > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
-    y_train = keras.utils.to_categorical(y_train, num_classes)  # creates (samples, num_categories) array
+    y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
+    y_data = keras.utils.to_categorical(y_data, num_classes)  # creates (samples, num_categories) array
+
+    # Split train and test data
+    train_length = int(train_ratio * len(x_data))
+    x_train = x_data[0:train_length, :, :, :]
+    x_test = x_data[train_length:, :, :, :]
+
+    y_train = y_data[0:train_length, :]
+    y_test = y_data[train_length:, :]
+
 
     ''' CREATING THE CNN '''
 
@@ -87,16 +97,16 @@ def train_model(data_folder='data', model_name='testModel'):
               batch_size=batch_size,
               epochs=epochs,
               verbose=1,
-              # validation_data=(x_test, y_test),
+              validation_data=(x_test, y_test),
               callbacks=[history])
 
-    # score = model.evaluate(x_test, y_test, verbose=0)
-    # print('Test loss:', score[0])
-    # print('Test accuracy:', score[1])
-    # plt.plot(range(1, 11), history.acc)
-    # plt.xlabel('Epochs')
-    # plt.ylabel('Accuracy')
-    # plt.show()
+    score = model.evaluate(x_test, y_test, verbose=0)
+    print('Test loss:', score[0])
+    print('Test accuracy:', score[1])
+    plt.plot(range(1, epochs+1), history.acc)
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.show()
     #
     # serialize model to JSON
 
@@ -112,4 +122,4 @@ def train_model(data_folder='data', model_name='testModel'):
 
 
 if __name__ == "__main__":
-    train_model('data', 'testModel1')
+    train_model('data', 'testModel_1')

@@ -11,10 +11,8 @@ show_plots = False
 model_name = 'testModel'
 
 
-''' load json and create model '''
-
-
 def load_model():
+    """ Load JSON model from disk """
     json_file = open('{}.json'.format(model_name), 'r')
     loaded_model_json = json_file.read()
     json_file.close()
@@ -24,8 +22,6 @@ def load_model():
     print("Loaded model from disk")
 
     return loaded_model
-
-''' load data '''
 
 
 def test_new_data(model):
@@ -105,24 +101,6 @@ if __name__ == "__main__":
 
     loaded_model = load_model()
     accuracy = test_existing_data(loaded_model)
-
-
-# random tester
-# test_sample = 10
-#
-# image = x_test[None, test_sample, :, :, :]  # None to retain dimensionality
-# target = int(y_test[test_sample])
-#
-# prediction = loaded_model.predict(image)
-# prediction = int(argmax(prediction))
-#
-# print('Prediction:', prediction)
-# print('Actual: ', target)
-#
-# plt.imshow(image[0, :, :, 0])
-# plt.draw()
-# plt.show()
-
 
 
 
