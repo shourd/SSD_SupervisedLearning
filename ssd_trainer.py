@@ -8,25 +8,29 @@ import matplotlib.pylab as plt
 import ssd_dataloader
 from os import  environ
 import pickle
-environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # surpresses the warning that CPU isn't used optimally (VX/FMA functionality)
+environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # surpresses the warning that CPU isn't used optimally (VX/FMA functionality)
 
-### TRAINING SETTINGS
+
+''' TRAINING SETTINGS '''
 batch_size = 128  # for backprop type
 epochs = 15
+save_model = True
+print_layer_size = True
 
-### LOAD SSD AND RESO DATA
+''' LOAD SSD AND RESO DATA '''
 num_classes = 2
 size = (120, 120)  # target img dimensions
 input_shape = (size[0], size[1], 1)
 
 x_train = ssd_dataloader.load_SSD(size)
-y_train = ssd_dataloader.load_resos(num_classes)
+y_train = ssd_dataloader.load_resos()
 
-pickle.dump( x_train, open( "SSDs.p", "wb" ) )
+# # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
+y_train = (y_train > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
+y_train = keras.utils.to_categorical(y_train, num_classes)  # creates (samples, num_categories) array
 
-### CREATING THE CNN
 
-print_layer_size = True
+''' CREATING THE CNN '''
 
 model = Sequential()
 
@@ -86,21 +90,25 @@ model.fit(x_train, y_train,
           batch_size=batch_size,
           epochs=epochs,
           verbose=1,
-          #validation_data=(x_test, y_test),
+          # validation_data=(x_test, y_test),
           callbacks=[history])
-#score = model.evaluate(x_test, y_test, verbose=0)
-#print('Test loss:', score[0])
-#print('Test accuracy:', score[1])
+
+# score = model.evaluate(x_test, y_test, verbose=0)
+# print('Test loss:', score[0])
+# print('Test accuracy:', score[1])
 # plt.plot(range(1, 11), history.acc)
 # plt.xlabel('Epochs')
 # plt.ylabel('Accuracy')
 # plt.show()
 #
 # serialize model to JSON
-model_json = model.to_json()
-with open("model_SSD.json", "w") as json_file:
-    json_file.write(model_json)
-# serialize weights to HDF5
-model.save_weights("model_SSD.h5")
-print("Saved model to disk")
+
+if save_model:
+    filename = 'testModel'
+    model_json = model.to_json()
+    with open('{}.json'.format(filename), "w") as json_file:
+        json_file.write(model_json)
+    # serialize weights to HDF5
+    model.save_weights('{}.h5'.format(filename))
+    print("Saved model to disk")
 

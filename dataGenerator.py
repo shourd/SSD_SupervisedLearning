@@ -25,8 +25,8 @@ def generate_ssd(save_files):
             if save_files: ssd_img.save(new_fname)
             ssd_array = np.array(ssd_img)
             ssd_stack.append(ssd_array)
-            i = i + 1
-        j = j + 1
+            i += 1
+        j += 1
     print('All transposed SSDs saved')
 
     ssd_stack = np.array(ssd_stack)
