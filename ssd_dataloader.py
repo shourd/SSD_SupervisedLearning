@@ -4,10 +4,10 @@ import numpy as np
 import pickle
 import os
 
+
 def load_SSD(size, folder='data'):
 
-    # filelist = sorted(glob('{}/*.png'.format(folder)))
-    # filelist = sorted(filelist, key=os.path.getmtime)
+    # filelist = sorted(filelist, key=os.path.getmtime) # to sort on time modified
     filelist = glob('{}/resolutions*.txt'.format(folder))
     ssd_stack = []
     for fname in filelist:
@@ -23,12 +23,14 @@ def load_SSD(size, folder='data'):
     ssd_stack = ssd_stack.astype('float32')
     ssd_stack /= 255
 
-    ssd_stack = ssd_stack.reshape(ssd_stack.shape[0], size[0], size[1], 1) # dimensions: (sample_num, x_size, y_size, amount of color bands)
+    # dimensions: (sample_num, x_size, y_size, amount of color bands)
+    ssd_stack = ssd_stack.reshape(ssd_stack.shape[0], size[0], size[1], 1)
 
     return ssd_stack
 
 
-### Load and preprocess Resolution Data
+''' Load and preprocess Resolution Data '''
+
 
 def load_resos(folder='data'):
     reso_stack = []
@@ -39,12 +41,6 @@ def load_resos(folder='data'):
             content = file.readlines()
 
         hdg_resolution = float(content[1].partition(";")[0])  # only take first resolution
-
-        # content.pop(0)  # Remove first line
-        #
-        # for line in content:
-        #     hdg_resolution = float(line.partition(";")[0])  # only take hdg reso
-
         reso_stack.append(hdg_resolution)
 
     reso_stack = np.array(reso_stack)
@@ -67,6 +63,5 @@ if __name__ == "__main__":
     reso_vector = load_resos()
 
     # save data
-    pickle.dump(SSD, open("ssdAll.pickle", "wb"))
+    pickle.dump(SSD, open("ssd_all.pickle", "wb"))
     pickle.dump(reso_vector, open("reso_vector.pickle", "wb"))
-
