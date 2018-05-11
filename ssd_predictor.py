@@ -3,31 +3,34 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import ssd_dataloader
+import time
 
 
 ''' SETTINGS '''
-new_data = False  # load new data from folder or take data from Pickles
 show_plots = False
-model_name = 'testModel'
 
 
-def load_model():
+def load_model(model_name):
     """ Load JSON model from disk """
+    print("Start loading model.")
+    t = time.time()
     json_file = open('{}.json'.format(model_name), 'r')
     loaded_model_json = json_file.read()
     json_file.close()
     loaded_model = model_from_json(loaded_model_json)
     # load weights into new model
     loaded_model.load_weights('{}.h5'.format(model_name))
-    print("Loaded model from disk")
+    elapsed = time.time() - t
+    print("Loaded model from disk. ({} s)".format(elapsed))
 
     return loaded_model
 
 
-def test_new_data(model):
+def test_new_data(model, data_folder='testData'):
+    """ Loads new SSDs from a folder and shows the predicted resolution """
 
     size = (120, 120)  # target img dimensions
-    x_train = ssd_dataloader.load_SSD(size, 'testData')
+    x_train = ssd_dataloader.load_SSD(size, data_folder)
 
     for sample in range(0, len(x_train)):
 
@@ -43,7 +46,7 @@ def test_new_data(model):
         elif prediction == 1:
             print('Right')
         else:
-            print('fout')
+            print('Error')
 
         if show_plots:
             plt.imshow(image[0, :, :, 0])
@@ -52,22 +55,23 @@ def test_new_data(model):
 
 
 def test_existing_data(model):
+    """ Data can be obtained by running ssd_dataloader.py """
 
     with open('ssd_all.pickle', 'rb') as f:
-        x_train = pickle.load(f)
+        x_data = pickle.load(f)
 
     with open('reso_vector.pickle', 'rb') as f:
-        y_train = pickle.load(f)
+        y_data = pickle.load(f)
 
     # # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
-    y_train = (y_train > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
+    y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
 
     error_count = 0
-    for i in range(0, len(x_train)):
+    for i in range(0, len(x_data)):
         test_sample = i
 
-        image = x_train[None, test_sample, :, :, :]  # None to retain dimensionality
-        target = int(y_train[test_sample])
+        image = x_data[None, test_sample, :, :, :]  # None to retain dimensionality
+        target = int(y_data[test_sample])
 
         probabilities = model.predict(image)
         print(probabilities)

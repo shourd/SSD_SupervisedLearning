@@ -29,16 +29,19 @@ def filter_data(folder='data'):
 
     # make list of scenarios that had LOS
     LOS_list = []
-    with open('{}/LOS_tracker.txt'.format(folder),'r') as file:
-        content = file.readlines()
-        for line in content:
-            scenario_num = line[6:-1]
-            LOS_list.append(scenario_num)
+    try:
+        with open('{}/LOS_tracker.txt'.format(folder),'r') as file:
+            content = file.readlines()
+            for line in content:
+                scenario_num = line[6:-1]
+                LOS_list.append(scenario_num)
 
-    # combine lists
-    for scenario_num in LOS_list:
-        if scenario_num not in remove_list:
-            remove_list.append(scenario_num)
+        # combine lists
+        for scenario_num in LOS_list:
+            if scenario_num not in remove_list:
+                remove_list.append(scenario_num)
+    except FileNotFoundError:
+        pass
 
     # remove reso txt files
     for scenario in remove_list:
@@ -57,7 +60,10 @@ def filter_data(folder='data'):
                 remove(subitem)
                 print('Removed: {}'.format(subitem))
 
+    resos_removed = len(remove_list)
+    print('Scenarios removed: {}'.format(resos_removed))
+
 
 if __name__ == "__main__":
-    folder = 'data'
+    folder = 'output'
     filter_data(folder)

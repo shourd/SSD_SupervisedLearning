@@ -2,8 +2,6 @@ from glob import glob
 from PIL import Image
 import numpy as np
 import pickle
-import os
-
 
 def load_SSD(size, folder='data'):
 
@@ -46,13 +44,6 @@ def load_resos(folder='data'):
     reso_stack = np.array(reso_stack)
 
     return reso_stack
-
-
-# def file_len(fname):
-#     with open(fname) as f:
-#         for i, l in enumerate(f):
-#             pass
-#     return i + 1
 
 
 if __name__ == "__main__":

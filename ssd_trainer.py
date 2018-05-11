@@ -6,16 +6,16 @@ from keras.models import Sequential
 import numpy as np
 import matplotlib.pylab as plt
 import ssd_dataloader
-from os import  environ
+from os import environ
 environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # surpresses the warning that CPU isn't used optimally (VX/FMA functionality)
+import pickle
 
 
-def train_model(data_folder='data', model_name='testModel'):
+def train_model(data_folder='data', model_name='testModel', epochs=15):
 
     """ TRAINING SETTINGS """
     batch_size = 128  # for backprop type
-    epochs = 15
-    train_ratio = 0.6  # train / test data
+    train_ratio = 0.8  # train / test data
     save_model = True
     print_layer_size = True
 
@@ -24,21 +24,30 @@ def train_model(data_folder='data', model_name='testModel'):
     size = (120, 120)  # target img dimensions
     input_shape = (size[0], size[1], 1)
 
-    x_data = ssd_dataloader.load_SSD(size, data_folder)
-    y_data = ssd_dataloader.load_resos(data_folder)
+    try:
+        x_train, x_test, y_train, y_test = pickle.load(open("training_data.pickle", "rb"))
+        print('Data loaded from Pickle')
 
-    # # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
-    y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
-    y_data = keras.utils.to_categorical(y_data, num_classes)  # creates (samples, num_categories) array
+    except FileNotFoundError:
 
-    # Split train and test data
-    train_length = int(train_ratio * len(x_data))
-    x_train = x_data[0:train_length, :, :, :]
-    x_test = x_data[train_length:, :, :, :]
+        print('Start loading data.')
+        x_data = ssd_dataloader.load_SSD(size, data_folder)
+        y_data = ssd_dataloader.load_resos(data_folder)
 
-    y_train = y_data[0:train_length, :]
-    y_test = y_data[train_length:, :]
+        # # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
+        y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
+        y_data = keras.utils.to_categorical(y_data, num_classes)  # creates (samples, num_categories) array
 
+        # Split train and test data
+        train_length = int(train_ratio * len(x_data))
+        x_train = x_data[0:train_length, :, :, :]
+        x_test = x_data[train_length:, :, :, :]
+
+        y_train = y_data[0:train_length, :]
+        y_test = y_data[train_length:, :]
+
+        pickle.dump([x_train, x_test, y_train, y_test], open("training_data.pickle", "wb"))
+        print('Data saved to disk.')
 
     ''' CREATING THE CNN '''
 
@@ -84,6 +93,9 @@ def train_model(data_folder='data', model_name='testModel'):
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
 
+    # sgd = keras.optimizers.SGD(lr=0.001)
+    # model.compile(loss="categorical_crossentropy", optimizer=sgd, metrics=['accuracy'])
+
     class AccuracyHistory(keras.callbacks.Callback):
         def on_train_begin(self, logs={}):
             self.acc = []
@@ -103,13 +115,8 @@ def train_model(data_folder='data', model_name='testModel'):
     score = model.evaluate(x_test, y_test, verbose=0)
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
-    plt.plot(range(1, epochs+1), history.acc)
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.show()
-    #
-    # serialize model to JSON
 
+    # serialize model to JSON
     if save_model:
         model_json = model.to_json()
         with open('{}.json'.format(model_name), "w") as json_file:
@@ -118,8 +125,16 @@ def train_model(data_folder='data', model_name='testModel'):
         model.save_weights('{}.h5'.format(model_name))
         print("Saved model to disk")
 
+    plt.plot(range(1, epochs+1), history.acc)
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.show()
+
     return model
 
 
 if __name__ == "__main__":
-    train_model('data', 'testModel_1')
+    folder_name = 'output'
+    model_name = 'first_model'
+    epochs = 6
+    train_model(folder_name, model_name, epochs)
