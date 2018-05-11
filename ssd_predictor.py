@@ -20,8 +20,8 @@ def load_model(model_name):
     loaded_model = model_from_json(loaded_model_json)
     # load weights into new model
     loaded_model.load_weights('{}.h5'.format(model_name))
-    elapsed = time.time() - t
-    print("Loaded model from disk. ({} s)".format(elapsed))
+    elapsed = round(time.time() - t, 2)
+    print("Loaded model from disk. ({} sec)".format(elapsed))
 
     return loaded_model
 
@@ -57,6 +57,7 @@ def test_new_data(model, data_folder='testData'):
 def test_existing_data(model):
     """ Data can be obtained by running ssd_dataloader.py """
 
+    print('Load data from disk.')
     with open('ssd_all.pickle', 'rb') as f:
         x_data = pickle.load(f)
 
@@ -66,7 +67,10 @@ def test_existing_data(model):
     # # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
     y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
 
+    print('Start prediction.')
     error_count = 0
+    confidence_left = []
+    confidence_right = []
     for i in range(0, len(x_data)):
         test_sample = i
 
@@ -74,36 +78,42 @@ def test_existing_data(model):
         target = int(y_data[test_sample])
 
         probabilities = model.predict(image)
-        print(probabilities)
         prediction = int(np.argmax(probabilities))
 
         if prediction == 0:
-            print('Left')
-        else:
-            print('Right')
+            confidence_left.append(probabilities[0][0])
 
-        if target is not prediction:
-            print('Fout')
-            error_count += 1
+        elif prediction == 1:
+            confidence_right.append(probabilities[0][1])
         else:
-            print('Goed')
-        # print('Prediction:', prediction)
-        # print('Actual: ', target)
+            print('Error')
+
+        if target is not prediction: error_count += 1
 
         if show_plots:
             plt.imshow(image[0, :, :, 0])
             plt.draw()
             plt.show()
 
-        accuracy = round((i+1 - error_count) / (i+1), 2)
-        print('Accuracy: {}'.format(accuracy))
+    accuracy = round((len(x_data) - error_count) / (len(x_data)), 2)
+    print('Total samples: {}'.format(len(x_data)))
+    print('Accuracy: {}'.format(accuracy))
+
+    confidence_left = np.array(confidence_left)
+    confidence_right = np.array(confidence_right)
+
+    confidence_left = round(float(np.mean(confidence_left)), 2)
+    confidence_right = round(float(np.mean(confidence_right)), 2)
+
+    print('Confidence left: {}'.format(confidence_left))
+    print('Confidence right: {}'.format(confidence_right))
 
     return accuracy
 
 
 if __name__ == "__main__":
-
-    loaded_model = load_model()
+    model_name = 'first_model'
+    loaded_model = load_model(model_name)
     accuracy = test_existing_data(loaded_model)
 
 

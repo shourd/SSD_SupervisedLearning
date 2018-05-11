@@ -27,10 +27,12 @@ def load_SSD(size, folder='data'):
     return ssd_stack
 
 
-''' Load and preprocess Resolution Data '''
+
 
 
 def load_resos(folder='data'):
+    ''' Load and preprocess Resolution Data '''
+
     reso_stack = []
     filelist = glob('{}/resolutions*.txt'.format(folder))
     for fname in filelist:
@@ -49,10 +51,13 @@ def load_resos(folder='data'):
 if __name__ == "__main__":
     size = 120, 120
     num_classes = 2
+    folder_name = 'output'
 
-    SSD = load_SSD(size)
-    reso_vector = load_resos()
+    print('Start loading data from folder: /{}'.format(folder_name))
+    SSD = load_SSD(size, folder_name)
+    reso_vector = load_resos(folder_name)
 
     # save data
     pickle.dump(SSD, open("ssd_all.pickle", "wb"))
     pickle.dump(reso_vector, open("reso_vector.pickle", "wb"))
+    print('Data saved to disk')
