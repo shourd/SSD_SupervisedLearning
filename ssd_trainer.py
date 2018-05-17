@@ -3,12 +3,15 @@ import keras
 from keras.layers import Dense, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from keras.models import Sequential
+from keras.utils import plot_model
 import numpy as np
 import matplotlib.pylab as plt
 import ssd_dataloader
 from os import environ
 environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # surpresses the warning that CPU isn't used optimally (VX/FMA functionality)
 import pickle
+
+
 
 
 def train_model(data_folder='data', model_name='testModel', epochs=15):
@@ -90,6 +93,9 @@ def train_model(data_folder='data', model_name='testModel', epochs=15):
 
     model.add(Dense(num_classes, activation='softmax'))
     if print_layer_size: print(model.output_shape)
+
+    # Output model structure to disk
+    plot_model(model, to_file='model_structure.png', show_shapes=True, show_layer_names=False)
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
 
