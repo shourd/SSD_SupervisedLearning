@@ -1,7 +1,7 @@
 """
 Executes the entire filtering, training and testing process
 """
-from dataFilter import filter_data
+from data_filter import filter_data
 import ssd_trainer
 import ssd_predictor
 

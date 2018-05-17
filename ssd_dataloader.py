@@ -3,6 +3,7 @@ from PIL import Image
 import numpy as np
 import pickle
 
+
 def load_SSD(size, folder='data'):
 
     # filelist = sorted(filelist, key=os.path.getmtime) # to sort on time modified
@@ -24,10 +25,8 @@ def load_SSD(size, folder='data'):
     # dimensions: (sample_num, x_size, y_size, amount of color bands)
     ssd_stack = ssd_stack.reshape(ssd_stack.shape[0], size[0], size[1], 1)
 
+    # returns (samples, dimension1, dimension2, 1) array with images.
     return ssd_stack
-
-
-
 
 
 def load_resos(folder='data'):
