@@ -1,5 +1,8 @@
 """
 Executes the entire filtering, training and testing process
+
+@author: Sjoerd van Rooijen
+
 """
 from data_filter import filter_data
 import ssd_trainer
