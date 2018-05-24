@@ -21,8 +21,15 @@ def filter_data(folder='data'):
     filelist = glob('{}/resolutions*.txt'.format(folder))
     remove_list = []
     for fname in filelist:
+
+        # save first resolution in file
+        with open(fname, 'r') as file:
+            content = file.readlines()
+            hdg_resolution = float(content[1].partition(";")[0])  # only take first resolution\
+
+        # remove if more than 3 resolutions or if first resolution is 0 deg
         file_length = file_len(fname)
-        if file_length > 4:
+        if file_length > 4 or hdg_resolution == 0:
             scenario_num = fname.partition('_S')[2]
             scenario_num = scenario_num[:-4]
             remove_list.append(scenario_num)
