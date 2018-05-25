@@ -13,7 +13,7 @@ def load_SSD(size, folder='data'):
         fname = fname.replace('resolutions', 'SSD')[:-4]
         fname = glob('{}*'.format(fname))[0]  # take only first entry
         ssd = Image.open(fname)
-        ssd = ssd.convert("L") # convert to greyscale
+        ssd = ssd.convert("L")  # convert to greyscale
         ssd = ssd.resize(size, Image.BILINEAR)
         ssd = np.array(ssd)
         ssd_stack.append(ssd)

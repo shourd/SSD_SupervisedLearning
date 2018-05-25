@@ -5,57 +5,79 @@ from keras.layers import Conv2D, MaxPooling2D
 from keras.models import Sequential
 from keras.utils import plot_model
 from keras.preprocessing.image import ImageDataGenerator
+from keras.callbacks import ModelCheckpoint
 import numpy as np
 import matplotlib.pylab as plt
 import ssd_dataloader
-from os import environ
-# from os import makedirs
-# import shutil
+from os import environ, path, makedirs
+import shutil
 import pickle
 import time
+import seaborn as sns
 environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # surpresses the warning that CPU isn't used optimally (VX/FMA functionality)
+sns.set_style("darkgrid")
 
 
 class Settings:
     def __init__(self):
-        self.data_folder        = 'data'
-        self.model_name         = 'test_model'
-        self.epochs             = 15
+        self.input_dir          = 'data'
+        self.output_dir         = 'output'
+        self.model_name         = 'model'
+        self.epochs             = 20
         self.train_val_ratio    = 0.8
         self.batch_size         = 128
-        self.amnt_input_data    = 3000              # the amount of SSDs to use for training
-        self.rotation_range     = 10                # the maxium degree of random rotation for data augmentation
+        self.num_samples        = 'all'             # the amount of SSDs to use for training [Integer or 'all']
+        self.rotation_range     = 0                 # the maxium degree of random rotation for data augmentation
         self.size               = 120, 120          # the pixel dimensions of imported SSDs
-        self.num_classes        = 2                # amount of resolution classes
+        self.num_classes        = 4                 # amount of resolution classes (2, 4, 6, or 12)
+        self.max_reso           = 30                # [deg] larger resolutions will be clipped.
         self.save_model         = True              # save trained model to disk
+        self.reload_data        = True              # load data from Pickle [False] or from raw SSDs [True]
 
 
 def train_model(settings):
 
     """ Start loading SSD and Resolution data """
-
     input_shape = (settings.size[0], settings.size[1], 1)
+    iteration_name = '{}classes_{}samples_{}px'.format(settings.num_classes, settings.num_samples, settings.size[0])
 
-    try:
-        x_data, y_data = pickle.load(open("training_data.pickle", "rb"))
-        print('Data loaded from Pickle')
-
-    except FileNotFoundError:
-
+    if settings.reload_data:
+        filename = 'training_data_{}px.pickle'.format(settings.size)
         print('Start loading data.')
-        x_data = ssd_dataloader.load_SSD(settings.size, settings.data_folder)
-        y_data = ssd_dataloader.load_resos(settings.data_folder)
-        pickle.dump([x_data, y_data], open("training_data.pickle", "wb"))
+        x_data = ssd_dataloader.load_SSD(settings.size, settings.input_dir)
+        print('SSDs loaded. Start loading resolutions.')
+        y_data = ssd_dataloader.load_resos(settings.input_dir)
+        pickle.dump([x_data, y_data], open(filename, "wb"))
         print('Data saved to disk.')
+    else:
+        try:
+            x_data, y_data = pickle.load(open("training_data.pickle", "rb"))
+            print('Data loaded from Pickle')
+        except FileNotFoundError:
+            print('Pickle data not found. Set settings.reload_data to True')
+            return
 
-    # y_data += 25
-    # y_data /= 5
-
+    # plt.hist(y_data,80)
+    # plt.xlabel('Resolution HDG')
+    # plt.ylabel('Count')
+    # plt.show()
     print(np.unique(y_data))
 
+    # Downsample resolution increments to nearest x degrees
+    y_data = np.clip(y_data, -settings.max_reso, settings.max_reso)
+    reso_resolution = 2 * settings.max_reso / settings.num_classes
+    y_data = np.round((y_data + settings.max_reso) / reso_resolution, 0)
+    print('Possible resolutions:')
+    print(np.unique(reso_resolution * y_data - settings.max_reso))
+
     # convert class vectors to binary class matrices - this is for use in the categorical_crossentropy loss below
-    y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
-    y_data = keras.utils.to_categorical(y_data, settings.num_classes)  # creates (samples, num_categories) array
+    # y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
+    y_data = keras.utils.to_categorical(y_data, settings.num_classes + 1)  # creates (samples, num_categories) array
+
+    # Define length of data set to be used
+    if settings.num_samples is not 'all':
+        x_data = x_data[0:settings.num_samples, :, :, :]
+        y_data = y_data[0:settings.num_samples, :]
 
     # Split train and test data
     train_length = int(settings.train_val_ratio * len(x_data))
@@ -67,16 +89,14 @@ def train_model(settings):
 
     ''' CREATING THE CNN '''
 
-
     data_length = len(x_train)+len(x_test)
-    print('Amount of SSDs: {}'.format(data_length))
+    print('Amount of SSDs: {} ({} train / {} val)'.format(data_length, len(x_train), len(x_test)))
 
     model = Sequential()
 
     # Set 0
     model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu', input_shape=input_shape))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-
 
     # Set 0a
     model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu', input_shape=input_shape))
@@ -93,7 +113,7 @@ def train_model(settings):
     # Flattening and FC
     model.add(Flatten())
     model.add(Dense(256, activation='relu'))
-    model.add(Dense(settings.num_classes, activation='softmax'))
+    model.add(Dense(settings.num_classes + 1, activation='softmax'))
 
     # Output model structure to disk
     plot_model(model, to_file='model_structure.png', show_shapes=True, show_layer_names=False)
@@ -103,6 +123,8 @@ def train_model(settings):
     # sgd = keras.optimizers.SGD(lr=0.001)
     # model.compile(loss="categorical_crossentropy", optimizer=sgd, metrics=['accuracy'])
 
+    ### CALLBACKS
+    # HISTORY
     class AccuracyHistory(keras.callbacks.Callback):
         def on_train_begin(self, logs={}):
             self.acc = []
@@ -112,14 +134,20 @@ def train_model(settings):
 
     history = AccuracyHistory()
 
+    # CHECKPOINTS
+    filepath = settings.output_dir + '/' + iteration_name + '.hdf5'
+    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+
+    callbacks_list = [checkpoint, history]
+
     # For debugging purposes. Exports augmented image data
     export_dir = None
-    # if export_dir is not None:
-    #     try:
-    #         makedirs(export_dir)
-    #     except FileExistsError:
-    #         shutil.rmtree(export_dir)
-    #         makedirs(export_dir)
+    if export_dir is not None:
+        try:
+            makedirs(export_dir)
+        except FileExistsError:
+            shutil.rmtree(export_dir)
+            makedirs(export_dir)
 
     train_datagen = ImageDataGenerator(
         rotation_range=settings.rotation_range,
@@ -130,6 +158,7 @@ def train_model(settings):
     train_generator = train_datagen.flow(
             x_train,
             y_train,
+            batch_size=settings.batch_size,
             save_to_dir=export_dir,
             save_prefix='aug',
             save_format='png')
@@ -144,7 +173,7 @@ def train_model(settings):
         epochs=settings.epochs,
         verbose=1,
         validation_data=(x_test, y_test),
-        callbacks=[history])
+        callbacks=callbacks_list)
 
     score = model.evaluate(x_test, y_test, verbose=0)
     test_loss = round(score[0], 3)
@@ -154,23 +183,63 @@ def train_model(settings):
     print('Test loss:', test_loss)
     print('Test accuracy:', test_accuracy)
 
+    """ SAVING MODEL AND RESULTS """
+
+    # Save resolutions to txt file
+    filename = settings.output_dir + '/output'
+
+    if not path.isfile(filename):
+        with open(filename + '.txt', 'w') as text_file:
+            text_file.write('This file contains the accuracies of the trained models.\n')
+
+    with open(filename + '.txt', 'a') as text_file:
+        text_file.write('{}: {}\n'.format(iteration_name, history.acc))
+
+    with open(filename + '.csv', 'a') as f:
+        f.write(",".join(map(str, history.acc)))
+        f.write("\n")
+
     # serialize model to JSON
+    settings.model_name = settings.output_dir + '/' + iteration_name
     if settings.save_model:
         model_json = model.to_json()
         with open('{}.json'.format(settings.model_name), "w") as json_file:
             json_file.write(model_json)
         # serialize weights to HDF5
-        model.save_weights('{}.h5'.format(settings.model_name))
+        # model.save_weights('{}.h5'.format(settings.model_name))
         print("Saved model to disk")
 
     plt.plot(range(1, settings.epochs+1), history.acc)
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
-    plt.show()
+    plt.title('Validation accuracy of the SSD CNN')
+    plt.savefig('{}/{}.png'.format(settings.output_dir, iteration_name), bbox_inches='tight')
 
     return model, test_accuracy
 
 
 if __name__ == "__main__":
     settings = Settings()
-    train_model(settings)
+
+    settings.input_dir = 'dataset22May'
+
+    # SSD SIZE
+    size_list = [(120, 120), (90, 90), (60, 60), (30, 30)]
+    for size in size_list:
+        settings.size = size
+        train_model(settings)
+        print('<--------- NEXT ITERATION --------->')
+
+
+    # class_list = [2, 4, 6, 12]
+    # for num_classes in class_list:
+    #     settings.num_classes = num_classes
+    #     train_model(settings)
+    #     print('<--------- NEXT ITERATION --------->')
+
+    # sample_list = [500, 1000, 3000, 5000]
+    # for num_samples in sample_list:
+    #
+    #     settings.num_samples = num_samples
+    #     train_model(settings)
+    #     print('<--------- NEXT ITERATION --------->')

@@ -26,6 +26,7 @@ def filter_data(folder='data'):
         with open(fname, 'r') as file:
             content = file.readlines()
             hdg_resolution = float(content[1].partition(";")[0])  # only take first resolution\
+            #print(hdg_resolution)
 
         # remove if more than 3 resolutions or if first resolution is 0 deg
         file_length = file_len(fname)
@@ -72,5 +73,5 @@ def filter_data(folder='data'):
 
 
 if __name__ == "__main__":
-    folder = 'output'
+    folder = 'dataset22May'
     filter_data(folder)
