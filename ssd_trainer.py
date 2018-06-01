@@ -24,34 +24,36 @@ class Settings:
         self.output_dir         = 'output'
         self.model_name         = 'model'
         self.epochs             = 20
-        self.train_val_ratio    = 0.8
+        self.train_val_ratio    = 0.5
         self.batch_size         = 128
         self.num_samples        = 'all'             # the amount of SSDs to use for training [Integer or 'all']
         self.rotation_range     = 0                 # the maxium degree of random rotation for data augmentation
-        self.size               = 120, 120          # the pixel dimensions of imported SSDs
-        self.num_classes        = 4                 # amount of resolution classes (2, 4, 6, or 12)
+        self.size               = 90, 90          # the pixel dimensions of imported SSDs
+        self.num_classes        = 6                 # amount of resolution classes (2, 4, 6, or 12)
         self.max_reso           = 30                # [deg] larger resolutions will be clipped.
         self.save_model         = True              # save trained model to disk
-        self.reload_data        = True              # load data from Pickle [False] or from raw SSDs [True]
+        self.reload_data        = False             # load data from Pickle [False] or from raw SSDs [True]
 
 
 def train_model(settings):
 
     """ Start loading SSD and Resolution data """
     input_shape = (settings.size[0], settings.size[1], 1)
-    iteration_name = '{}classes_{}samples_{}px'.format(settings.num_classes, settings.num_samples, settings.size[0])
+    ratio_int = int(settings.train_val_ratio * 100)
+    iteration_name = '{}classes_{}samples_{}px_{}deg_{}ratio'\
+        .format(settings.num_classes, settings.num_samples, settings.size[0], settings.rotation_range, ratio_int)
 
+    filename = 'training_data_{}px.pickle'.format(settings.size[0])
     if settings.reload_data:
-        filename = 'training_data_{}px.pickle'.format(settings.size)
         print('Start loading data.')
-        x_data = ssd_dataloader.load_SSD(settings.size, settings.input_dir)
+        x_data = ssd_dataloader.load_ssd(settings.size, settings.input_dir)
         print('SSDs loaded. Start loading resolutions.')
         y_data = ssd_dataloader.load_resos(settings.input_dir)
         pickle.dump([x_data, y_data], open(filename, "wb"))
         print('Data saved to disk.')
     else:
         try:
-            x_data, y_data = pickle.load(open("training_data.pickle", "rb"))
+            x_data, y_data = pickle.load(open(filename, "rb"))
             print('Data loaded from Pickle')
         except FileNotFoundError:
             print('Pickle data not found. Set settings.reload_data to True')
@@ -74,18 +76,18 @@ def train_model(settings):
     # y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
     y_data = keras.utils.to_categorical(y_data, settings.num_classes + 1)  # creates (samples, num_categories) array
 
-    # Define length of data set to be used
-    if settings.num_samples is not 'all':
-        x_data = x_data[0:settings.num_samples, :, :, :]
-        y_data = y_data[0:settings.num_samples, :]
-
-    # Split train and test data
+    # Split train and test data (len(x_data) = 5799)
     train_length = int(settings.train_val_ratio * len(x_data))
     x_train = x_data[0:train_length, :, :, :]
     x_test = x_data[train_length:, :, :, :]
 
     y_train = y_data[0:train_length, :]
     y_test = y_data[train_length:, :]
+
+    # Define length of data set to be used
+    if settings.num_samples is not 'all':
+        x_train = x_train[0:settings.num_samples, :, :, :]
+        y_train = y_train[0:settings.num_samples, :]
 
     ''' CREATING THE CNN '''
 
@@ -94,36 +96,43 @@ def train_model(settings):
 
     model = Sequential()
 
+    model.add(keras.layers.InputLayer(input_shape=input_shape))
+
+    """ The model structure varies its amnt of pooling layers basesd on the SSD input size """
+    """ TODO test basic structure with one or two less layers """
     # Set 0
     model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu', input_shape=input_shape))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    if settings.size[0] >= 120:
+        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
 
     # Set 0a
-    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu', input_shape=input_shape))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+    if settings.size[0] >= 60:
+        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
 
     # Set 1
-    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu', input_shape=input_shape))
+    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
 
     # Set 2
-    model.add(Conv2D(64, (5, 5), activation='relu'))
+    model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # Flattening and FC
     model.add(Flatten())
     model.add(Dense(256, activation='relu'))
     model.add(Dense(settings.num_classes + 1, activation='softmax'))
+    model.summary()
 
     # Output model structure to disk
-    plot_model(model, to_file='model_structure.png', show_shapes=True, show_layer_names=False)
+    plot_model(model, to_file='model_structure_{}px.png'.format(settings.size[0]), show_shapes=True, show_layer_names=False)
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
 
     # sgd = keras.optimizers.SGD(lr=0.001)
     # model.compile(loss="categorical_crossentropy", optimizer=sgd, metrics=['accuracy'])
 
-    ### CALLBACKS
+    """ CALLBACKS """
     # HISTORY
     class AccuracyHistory(keras.callbacks.Callback):
         def on_train_begin(self, logs={}):
@@ -169,7 +178,7 @@ def train_model(settings):
     # start training
     model.fit_generator(
         train_generator,
-        steps_per_epoch=len(x_train) / settings.batch_size,
+        steps_per_epoch=5800 / settings.batch_size,  # len(x_train) / settings.batch_size,
         epochs=settings.epochs,
         verbose=1,
         validation_data=(x_test, y_test),
@@ -187,14 +196,6 @@ def train_model(settings):
 
     # Save resolutions to txt file
     filename = settings.output_dir + '/output'
-
-    if not path.isfile(filename):
-        with open(filename + '.txt', 'w') as text_file:
-            text_file.write('This file contains the accuracies of the trained models.\n')
-
-    with open(filename + '.txt', 'a') as text_file:
-        text_file.write('{}: {}\n'.format(iteration_name, history.acc))
-
     with open(filename + '.csv', 'a') as f:
         f.write(",".join(map(str, history.acc)))
         f.write("\n")

@@ -10,27 +10,11 @@ import time
 show_plots = False
 
 
-def load_model(model_name):
-    """ Load JSON model from disk """
-    print("Start loading model.")
-    t = time.time()
-    json_file = open('{}.json'.format(model_name), 'r')
-    loaded_model_json = json_file.read()
-    json_file.close()
-    loaded_model = model_from_json(loaded_model_json)
-    # load weights into new model
-    loaded_model.load_weights('{}.h5'.format(model_name))
-    elapsed = round(time.time() - t, 2)
-    print("Loaded model from disk. ({} sec)".format(elapsed))
-
-    return loaded_model
-
-
 def test_new_data(model, data_folder='testData'):
     """ Loads new SSDs from a folder and shows the predicted resolution """
 
     size = (120, 120)  # target img dimensions
-    x_train = ssd_dataloader.load_SSD(size, data_folder)
+    x_train = ssd_dataloader.load_ssd(size, data_folder)
 
     for sample in range(0, len(x_train)):
 

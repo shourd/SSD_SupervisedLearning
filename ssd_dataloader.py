@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 
 
-def load_SSD(size, folder='data'):
+def load_ssd(size, folder='data'):
 
     # filelist = sorted(filelist, key=os.path.getmtime) # to sort on time modified
     filelist = glob('{}/resolutions*.txt'.format(folder))
@@ -46,14 +46,13 @@ def load_resos(folder='data'):
 
     return reso_stack
 
-
 if __name__ == "__main__":
     size = 120, 120
     num_classes = 2
     folder_name = 'output'
 
     print('Start loading data from folder: /{}'.format(folder_name))
-    SSD = load_SSD(size, folder_name)
+    SSD = load_ssd(size, folder_name)
     reso_vector = load_resos(folder_name)
 
     # save data
