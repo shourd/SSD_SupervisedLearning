@@ -23,14 +23,15 @@ class Settings:
         self.input_dir          = 'data'
         self.output_dir         = 'output'
         self.model_name         = 'model'
-        self.epochs             = 20
-        self.train_val_ratio    = 0.5
+        self.epochs             = 25
+        self.train_val_ratio    = 0.8
         self.batch_size         = 128
         self.num_samples        = 'all'             # the amount of SSDs to use for training [Integer or 'all']
         self.rotation_range     = 0                 # the maxium degree of random rotation for data augmentation
-        self.size               = 90, 90          # the pixel dimensions of imported SSDs
+        self.size               = 64, 64            # the pixel dimensions of imported SSDs
         self.num_classes        = 6                 # amount of resolution classes (2, 4, 6, or 12)
         self.max_reso           = 30                # [deg] larger resolutions will be clipped.
+        self.architecture       = 0                 # The standard architecture
         self.save_model         = True              # save trained model to disk
         self.reload_data        = False             # load data from Pickle [False] or from raw SSDs [True]
 
@@ -40,13 +41,18 @@ def train_model(settings):
     """ Start loading SSD and Resolution data """
     input_shape = (settings.size[0], settings.size[1], 1)
     ratio_int = int(settings.train_val_ratio * 100)
-    iteration_name = '{}classes_{}samples_{}px_{}deg_{}ratio'\
-        .format(settings.num_classes, settings.num_samples, settings.size[0], settings.rotation_range, ratio_int)
+    iteration_name = '{}c_{}s_{}px_{}deg_{}r_{}a'.format(
+        settings.num_classes,
+        settings.num_samples,
+        settings.size[0],
+        settings.rotation_range,
+        ratio_int,
+        settings.architecture_num)
 
     filename = 'training_data_{}px.pickle'.format(settings.size[0])
     if settings.reload_data:
         print('Start loading data.')
-        x_data = ssd_dataloader.load_ssd(settings.size, settings.input_dir)
+        x_data = ssd_dataloader.load_SSD(settings.size, settings.input_dir)
         print('SSDs loaded. Start loading resolutions.')
         y_data = ssd_dataloader.load_resos(settings.input_dir)
         pickle.dump([x_data, y_data], open(filename, "wb"))
@@ -98,34 +104,69 @@ def train_model(settings):
 
     model.add(keras.layers.InputLayer(input_shape=input_shape))
 
-    """ The model structure varies its amnt of pooling layers basesd on the SSD input size """
-    """ TODO test basic structure with one or two less layers """
-    # Set 0
-    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu', input_shape=input_shape))
-    if settings.size[0] >= 120:
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    """" ARCHITECTURES WITH TYPES OF LAYERS """
+    # BASELINE ARCHITECTURE
+    if settings.architecture_num == 0:
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(4, 4)))
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        
+    # smaller pooling layer
+    if settings.architecture_num == 1:
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        
+    # larger 1st conv filter
+    if settings.architecture_num == 2:
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(4, 4)))
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    # Set 0a
-    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
-    if settings.size[0] >= 60:
-        model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    # larger 2nd conv filter
+    if settings.architecture_num == 3:
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(4, 4)))
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    # Set 1
-    model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+    """" ARCHITECTURES WITH DIFFERENT AMOUNT OF LAYERS """
+    # only one layer
+    if settings.architecture_num == 4:
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(4, 4)))
 
-    # Set 2
-    model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    # one layer combo added to archi_1
+    if settings.architecture_num == 5:
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+
+    # two layer combos acdded to archi_1
+    if settings.architecture_num == 6:
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # Flattening and FC
     model.add(Flatten())
-    model.add(Dense(256, activation='relu'))
+    model.add(Dense(1024, activation='relu'))
     model.add(Dense(settings.num_classes + 1, activation='softmax'))
     model.summary()
 
     # Output model structure to disk
-    plot_model(model, to_file='model_structure_{}px.png'.format(settings.size[0]), show_shapes=True, show_layer_names=False)
+    plot_model(model, to_file='output/model_structure_{}px_{}a.png'.format(settings.size[0], settings.architecture_num), show_shapes=True, show_layer_names=False)
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
 
@@ -216,31 +257,98 @@ def train_model(settings):
     plt.title('Validation accuracy of the SSD CNN')
     plt.savefig('{}/{}.png'.format(settings.output_dir, iteration_name), bbox_inches='tight')
 
-    return model, test_accuracy
+    return model, test_accuracy, train_time
+
+
+def save_train_data(val_acc_list, train_time_list):
+    filename = settings.output_dir + '/train_time_list.csv'
+    with open(filename, 'a') as f:
+        f.write(",".join(map(str, train_time_list)))
+        f.write("\n")
+
+    filename = settings.output_dir + '/val_acc_list.csv'
+    with open(filename, 'a') as f:
+        f.write(",".join(map(str, val_acc_list)))
+        f.write("\n")
 
 
 if __name__ == "__main__":
     settings = Settings()
-
+    train_time_list = []
+    val_acc_list = []
     settings.input_dir = 'dataset22May'
 
-    # SSD SIZE
-    size_list = [(120, 120), (90, 90), (60, 60), (30, 30)]
+    settings.reload_data = True
+    print('Input dimensions')
+    size_list = [(120, 120), (96, 96), (64, 64), (32, 32), (16, 16)]
     for size in size_list:
+        print('<--------- DIMENSION: {} px --------->'.format(size[0]))
         settings.size = size
-        train_model(settings)
-        print('<--------- NEXT ITERATION --------->')
+        _, val_acc, train_time = train_model(settings)
+        val_acc_list.append(val_acc)
+        train_time_list.append(train_time)
+
+    save_train_data(val_acc_list, train_time_list)
+    train_time_list = []
+    val_acc_list = []
+    settings.size = (96, 96)
+    settings.reload_data = False
+
+    total_architectures = 7
+    print('Architectures')
+    for architecture_num in range(total_architectures):
+        print('<--------- ARCHITECTURE: {} --------->'.format(architecture_num))
+        settings.architecture = architecture_num
+        _, val_acc, train_time = train_model(settings)
+        val_acc_list.append(val_acc)
+        train_time_list.append(train_time)
+
+    save_train_data(val_acc_list, train_time_list)
+    train_time_list = []
+    val_acc_list = []
+
+    settings.architecture = 0
+
+    print('Rotations')
+    rotation_list = [0, 1, 2, 3, 4, 5]
+    settings.num_samples = 1000
+    for rotation in rotation_list:
+        print('<--------- ROTATION: {} deg --------->'.format(rotation))
+        settings.rotation_range = rotation
+        _, val_acc, train_time = train_model(settings)
+        val_acc_list.append(val_acc)
+        train_time_list.append(train_time)
+
+    save_train_data(val_acc_list, train_time_list)
+    train_time_list = []
+    val_acc_list = []
+    settings.num_samples = 'all'
+    settings.rotation_range = 0
+
+    print('Num of output classes')
+    class_list = [2, 4, 6, 8, 10, 12]
+    for num_classes in class_list:
+        print('<--------- NUMBER OF CLASSES: {} --------->'.format(num_classes))
+        settings.num_classes = num_classes
+        _, val_acc, train_time = train_model(settings)
+        val_acc_list.append(val_acc)
+        train_time_list.append(train_time)
+
+    save_train_data(val_acc_list, train_time_list)
+    train_time_list = []
+    val_acc_list = []
+
+    settings.num_classes = 6
+
+    print('Num of samples')
+    sample_list = [150, 300, 500, 1000, 1500, 2000, 3000, 'all']
+    for num_samples in sample_list:
+        print('<--------- ITERATION: {} samples --------->'.format(num_samples))
+        settings.num_samples = num_samples
+        _, val_acc, train_time = train_model(settings)
+        val_acc_list.append(val_acc)
+        train_time_list.append(train_time)
+
+    save_train_data(val_acc_list, train_time_list)
 
 
-    # class_list = [2, 4, 6, 12]
-    # for num_classes in class_list:
-    #     settings.num_classes = num_classes
-    #     train_model(settings)
-    #     print('<--------- NEXT ITERATION --------->')
-
-    # sample_list = [500, 1000, 3000, 5000]
-    # for num_samples in sample_list:
-    #
-    #     settings.num_samples = num_samples
-    #     train_model(settings)
-    #     print('<--------- NEXT ITERATION --------->')

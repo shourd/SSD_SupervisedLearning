@@ -96,4 +96,5 @@ if __name__ == "__main__":
     plt.xlabel('Sample size')
     plt.ylabel('Test accuracy')
     plt.title('Test accuracy of the SSD CNNs')
+    plt.savefig('output/test_accuracy.png', bbox_inches='tight')
     plt.show()
