@@ -73,5 +73,5 @@ def filter_data(folder='data'):
 
 
 if __name__ == "__main__":
-    folder = 'dataset22May'
+    folder = 'test_data_filtered'
     filter_data(folder)
