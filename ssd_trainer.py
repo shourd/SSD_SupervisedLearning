@@ -47,7 +47,7 @@ def train_model(settings):
         settings.size[0],
         settings.rotation_range,
         ratio_int,
-        settings.architecture_num)
+        settings.architecture)
 
     filename = 'training_data_{}px.pickle'.format(settings.size[0])
     if settings.reload_data:
@@ -62,8 +62,12 @@ def train_model(settings):
             x_data, y_data = pickle.load(open(filename, "rb"))
             print('Data loaded from Pickle')
         except FileNotFoundError:
-            print('Pickle data not found. Set settings.reload_data to True')
-            return
+            print('Start loading data.')
+            x_data = ssd_dataloader.load_SSD(settings.size, settings.input_dir)
+            print('SSDs loaded. Start loading resolutions.')
+            y_data = ssd_dataloader.load_resos(settings.input_dir)
+            pickle.dump([x_data, y_data], open(filename, "wb"))
+            print('Data saved to disk.')
 
     # plt.hist(y_data,80)
     # plt.xlabel('Resolution HDG')
@@ -106,28 +110,28 @@ def train_model(settings):
 
     """" ARCHITECTURES WITH TYPES OF LAYERS """
     # BASELINE ARCHITECTURE
-    if settings.architecture_num == 0:
+    if settings.architecture == 0:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         
     # smaller pooling layer
-    if settings.architecture_num == 1:
+    if settings.architecture == 1:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         
     # larger 1st conv filter
-    if settings.architecture_num == 2:
+    if settings.architecture == 2:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # larger 2nd conv filter
-    if settings.architecture_num == 3:
+    if settings.architecture == 3:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
@@ -135,12 +139,12 @@ def train_model(settings):
 
     """" ARCHITECTURES WITH DIFFERENT AMOUNT OF LAYERS """
     # only one layer
-    if settings.architecture_num == 4:
+    if settings.architecture == 4:
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
 
     # one layer combo added to archi_1
-    if settings.architecture_num == 5:
+    if settings.architecture == 5:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
@@ -149,7 +153,7 @@ def train_model(settings):
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # two layer combos acdded to archi_1
-    if settings.architecture_num == 6:
+    if settings.architecture == 6:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
@@ -166,7 +170,11 @@ def train_model(settings):
     model.summary()
 
     # Output model structure to disk
-    plot_model(model, to_file='output/model_structure_{}px_{}a.png'.format(settings.size[0], settings.architecture_num), show_shapes=True, show_layer_names=False)
+    plot_model(model, to_file='{}/model_structure_{}px_{}a.png'.format(
+        settings.output_dir, 
+        settings.size[0], 
+        settings.architecture),
+    show_shapes=True, show_layer_names=False)
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
 
@@ -236,7 +244,7 @@ def train_model(settings):
     """ SAVING MODEL AND RESULTS """
 
     # Save resolutions to txt file
-    filename = settings.output_dir + '/output'
+    filename = settings.output_dir + '/train_acc'
     with open(filename + '.csv', 'a') as f:
         f.write(",".join(map(str, history.acc)))
         f.write("\n")
@@ -278,7 +286,6 @@ if __name__ == "__main__":
     val_acc_list = []
     settings.input_dir = 'dataset22May'
 
-    settings.reload_data = True
     print('Input dimensions')
     size_list = [(120, 120), (96, 96), (64, 64), (32, 32), (16, 16)]
     for size in size_list:
@@ -292,7 +299,6 @@ if __name__ == "__main__":
     train_time_list = []
     val_acc_list = []
     settings.size = (96, 96)
-    settings.reload_data = False
 
     total_architectures = 7
     print('Architectures')
