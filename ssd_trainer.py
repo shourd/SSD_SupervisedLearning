@@ -347,7 +347,7 @@ if __name__ == "__main__":
     settings.num_classes = 6
 
     print('Num of samples')
-    sample_list = [150, 300, 500, 1000, 1500, 2000, 3000, 'all']
+    sample_list = [150, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000, 'all']
     for num_samples in sample_list:
         print('<--------- ITERATION: {} samples --------->'.format(num_samples))
         settings.num_samples = num_samples

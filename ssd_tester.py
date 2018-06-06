@@ -40,8 +40,12 @@ def load_data():
             x_test, y_test = pickle.load(open(filename, "rb"))
             print('Data loaded from Pickle')
         except FileNotFoundError:
-            print('Pickle data not found. Set settings.reload_data to True')
-            return
+            print('Start loading data.')
+            x_test = ssd_dataloader.load_ssd(settings.size, settings.input_dir)
+            print('SSDs loaded. Start loading resolutions.')
+            y_test = ssd_dataloader.load_resos(settings.input_dir)
+            pickle.dump([x_test, y_test], open(filename, "wb"))
+            print('Data saved to disk.')
 
     y_test = np.clip(y_test, -settings.max_reso, settings.max_reso)
     reso_resolution = 2 * settings.max_reso / settings.num_classes
