@@ -32,6 +32,7 @@ class Settings:
         self.num_classes        = 6                 # amount of resolution classes (2, 4, 6, or 12)
         self.max_reso           = 30                # [deg] larger resolutions will be clipped.
         self.architecture       = 0                 # The standard architecture
+        self.randomize_fraction = 0                 # Randomize fraction of samples to simulate human randomness
         self.save_model         = True              # save trained model to disk
         self.reload_data        = False             # load data from Pickle [False] or from raw SSDs [True]
 
@@ -41,41 +42,35 @@ def train_model(settings):
     """ Start loading SSD and Resolution data """
     input_shape = (settings.size[0], settings.size[1], 1)
     ratio_int = int(settings.train_val_ratio * 100)
-    iteration_name = '{}c_{}s_{}px_{}deg_{}r_{}a'.format(
+    fraction_print = int(settings.randomize_fraction * 100)
+    iteration_name = '{}c_{}s_{}px_{}deg_{}r_{}a_{}f'.format(
         settings.num_classes,
         settings.num_samples,
         settings.size[0],
         settings.rotation_range,
         ratio_int,
-        settings.architecture)
+        settings.architecture,
+        fraction_print)
 
     filename = 'training_data_{}px.pickle'.format(settings.size[0])
-    if settings.reload_data:
+    try:
+        x_data, y_data = pickle.load(open(filename, "rb"))
+        print('Data loaded from Pickle')
+    except FileNotFoundError:
         print('Start loading data.')
-        x_data = ssd_dataloader.load_SSD(settings.size, settings.input_dir)
+        x_data = ssd_dataloader.load_ssd(settings.size, settings.input_dir)
         print('SSDs loaded. Start loading resolutions.')
         y_data = ssd_dataloader.load_resos(settings.input_dir)
         pickle.dump([x_data, y_data], open(filename, "wb"))
         print('Data saved to disk.')
-    else:
-        try:
-            x_data, y_data = pickle.load(open(filename, "rb"))
-            print('Data loaded from Pickle')
-        except FileNotFoundError:
-            print('Start loading data.')
-            x_data = ssd_dataloader.load_SSD(settings.size, settings.input_dir)
-            print('SSDs loaded. Start loading resolutions.')
-            y_data = ssd_dataloader.load_resos(settings.input_dir)
-            pickle.dump([x_data, y_data], open(filename, "wb"))
-            print('Data saved to disk.')
 
     # plt.hist(y_data,80)
     # plt.xlabel('Resolution HDG')
     # plt.ylabel('Count')
     # plt.show()
-    print(np.unique(y_data))
+    # print(np.unique(y_data))
 
-    # Downsample resolution increments to nearest x degrees
+    # Downsample resolution increments to fit in output classes
     y_data = np.clip(y_data, -settings.max_reso, settings.max_reso)
     reso_resolution = 2 * settings.max_reso / settings.num_classes
     y_data = np.round((y_data + settings.max_reso) / reso_resolution, 0)
@@ -86,7 +81,7 @@ def train_model(settings):
     # y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
     y_data = keras.utils.to_categorical(y_data, settings.num_classes + 1)  # creates (samples, num_categories) array
 
-    # Split train and test data (len(x_data) = 5799)
+    # Split train and test data
     train_length = int(settings.train_val_ratio * len(x_data))
     x_train = x_data[0:train_length, :, :, :]
     x_test = x_data[train_length:, :, :, :]
@@ -98,6 +93,10 @@ def train_model(settings):
     if settings.num_samples is not 'all':
         x_train = x_train[0:settings.num_samples, :, :, :]
         y_train = y_train[0:settings.num_samples, :]
+
+    """" Make certain amount of resolutions random """
+    y_train = randomize_resolutions(y_train, settings.randomize_fraction)
+    y_test = randomize_resolutions(y_test, settings.randomize_fraction)
 
     ''' CREATING THE CNN '''
 
@@ -170,11 +169,14 @@ def train_model(settings):
     model.summary()
 
     # Output model structure to disk
+    if not path.exists(settings.output_dir):
+        makedirs(settings.output_dir)
+
     plot_model(model, to_file='{}/model_structure_{}px_{}a.png'.format(
         settings.output_dir, 
         settings.size[0], 
         settings.architecture),
-    show_shapes=True, show_layer_names=False)
+        show_shapes=True, show_layer_names=False)
 
     model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
 
@@ -280,11 +282,31 @@ def save_train_data(val_acc_list, train_time_list):
         f.write("\n")
 
 
+def unison_shuffled_copies(a, b):
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    return a[p], b[p]
+
+
+def randomize_resolutions(reso_data, fraction_random):
+    cap = int(fraction_random * len(reso_data))
+    if fraction_random > 0:
+        for idx, resolution in enumerate(reso_data):
+            if idx < cap:
+                reso_data[idx] = np.zeros(settings.num_classes + 1)  # Set all resos to 0
+                reso_data[idx][np.random.randint(settings.num_classes+1)] = 1 # set a random reso to 1
+
+    print('{} samples ({}%) randomized!'.format(cap, fraction_random * 100))
+    return reso_data
+
+
 if __name__ == "__main__":
     settings = Settings()
     train_time_list = []
     val_acc_list = []
     settings.input_dir = 'dataset22May'
+    settings.output_dir = 'outputRandomness'
+    settings.num_samples = 3000
 
     print('Input dimensions')
     size_list = [(120, 120), (96, 96), (64, 64), (32, 32), (16, 16)]
@@ -356,5 +378,15 @@ if __name__ == "__main__":
         train_time_list.append(train_time)
 
     save_train_data(val_acc_list, train_time_list)
+    settings.num_samples = 3000
 
+    print('Human Randomizer')
+    fraction_list = [0]
+    for fraction in fraction_list:
+        print('<--------- FRACTION: {} --------->'.format(fraction))
+        settings.randomize_fraction = fraction
+        _, val_acc, train_time = train_model(settings)
+        val_acc_list.append(val_acc)
+        train_time_list.append(train_time)
 
+    save_train_data(val_acc_list, train_time_list)
