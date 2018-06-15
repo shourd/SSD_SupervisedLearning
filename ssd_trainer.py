@@ -20,15 +20,17 @@ sns.set_style("darkgrid")
 
 class Settings:
     def __init__(self):
-        self.input_dir          = 'data'
+        self.input_dir          = 'dataset22May'
         self.output_dir         = 'output'
         self.model_name         = 'model'
+        self.variable_name      = ''
         self.epochs             = 25
         self.train_val_ratio    = 0.8
         self.batch_size         = 128
-        self.num_samples        = 'all'             # the amount of SSDs to use for training [Integer or 'all']
+        self.steps_per_epoch    = 3000 / 128
+        self.num_samples        = 3000              # the amount of SSDs to use for training [Integer or 'all']
         self.rotation_range     = 0                 # the maxium degree of random rotation for data augmentation
-        self.size               = 64, 64            # the pixel dimensions of imported SSDs
+        self.size               = 96, 96            # the pixel dimensions of imported SSDs
         self.num_classes        = 6                 # amount of resolution classes (2, 4, 6, or 12)
         self.max_reso           = 30                # [deg] larger resolutions will be clipped.
         self.architecture       = 0                 # The standard architecture
@@ -43,12 +45,11 @@ def train_model(settings):
     input_shape = (settings.size[0], settings.size[1], 1)
     ratio_int = int(settings.train_val_ratio * 100)
     fraction_print = int(settings.randomize_fraction * 100)
-    iteration_name = '{}c_{}s_{}px_{}deg_{}r_{}a_{}f'.format(
+    iteration_name = '{}c_{}s_{}px_{}deg_{}a_{}f'.format(
         settings.num_classes,
         settings.num_samples,
         settings.size[0],
         settings.rotation_range,
-        ratio_int,
         settings.architecture,
         fraction_print)
 
@@ -63,6 +64,11 @@ def train_model(settings):
         y_data = ssd_dataloader.load_resos(settings.input_dir)
         pickle.dump([x_data, y_data], open(filename, "wb"))
         print('Data saved to disk.')
+
+    """ Shuffle data randomly in unison """
+    x_data, y_data = unison_shuffled_copies(x_data, y_data)
+
+    # Show Histogram of reso data
 
     # plt.hist(y_data,80)
     # plt.xlabel('Resolution HDG')
@@ -107,21 +113,23 @@ def train_model(settings):
 
     model.add(keras.layers.InputLayer(input_shape=input_shape))
 
-    """" ARCHITECTURES WITH TYPES OF LAYERS """
+    """" ARCHITECTURES WITH TYPES OF LAYERS. Varies with input size """
     # BASELINE ARCHITECTURE
     if settings.architecture == 0:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(4, 4)))
+        if settings.size[0] > 32:
+            model.add(MaxPooling2D(pool_size=(4, 4)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        
+        if settings.size[0] > 16:
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+
     # smaller pooling layer
     if settings.architecture == 1:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
-        
+
     # larger 1st conv filter
     if settings.architecture == 2:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
@@ -229,7 +237,7 @@ def train_model(settings):
     # start training
     model.fit_generator(
         train_generator,
-        steps_per_epoch=5800 / settings.batch_size,  # len(x_train) / settings.batch_size,
+        steps_per_epoch=settings.steps_per_epoch,  # len(x_train) / settings.batch_size,
         epochs=settings.epochs,
         verbose=1,
         validation_data=(x_test, y_test),
@@ -245,9 +253,9 @@ def train_model(settings):
 
     """ SAVING MODEL AND RESULTS """
 
-    # Save resolutions to txt file
-    filename = settings.output_dir + '/train_acc'
-    with open(filename + '.csv', 'a') as f:
+    # Save training accuracy to txt file
+    filename = settings.output_dir + '/train_acc.csv'
+    with open(filename, 'a') as f:
         f.write(",".join(map(str, history.acc)))
         f.write("\n")
 
@@ -270,13 +278,17 @@ def train_model(settings):
     return model, test_accuracy, train_time
 
 
-def save_train_data(val_acc_list, train_time_list):
-    filename = settings.output_dir + '/train_time_list.csv'
+def save_train_data(var_name, val_acc_list, train_time_list):
+    output_dir = 'CSV_output'
+    if not path.exists(output_dir):
+        makedirs(output_dir)
+
+    filename = '{}/train_time_{}.csv'.format(output_dir, var_name)
     with open(filename, 'a') as f:
         f.write(",".join(map(str, train_time_list)))
         f.write("\n")
 
-    filename = settings.output_dir + '/val_acc_list.csv'
+        filename = '{}/val_acc_{}.csv'.format(output_dir, var_name)
     with open(filename, 'a') as f:
         f.write(",".join(map(str, val_acc_list)))
         f.write("\n")
@@ -293,100 +305,62 @@ def randomize_resolutions(reso_data, fraction_random):
     if fraction_random > 0:
         for idx, resolution in enumerate(reso_data):
             if idx < cap:
+                print('debug randomize: ',settings.num_classes)
                 reso_data[idx] = np.zeros(settings.num_classes + 1)  # Set all resos to 0
-                reso_data[idx][np.random.randint(settings.num_classes+1)] = 1 # set a random reso to 1
+                reso_data[idx][np.random.randint(settings.num_classes+1)] = 1  # set a random reso to 1
 
     print('{} samples ({}%) randomized!'.format(cap, fraction_random * 100))
     return reso_data
 
 
+def iterate_over_variables(variable_names, all_parameters, output_dir):
+
+    for idx, variable in enumerate(variable_names):
+        settings = Settings()  # reset all settings
+        settings.output_dir = output_dir
+        settings.variable_name = variable
+        train_time_list = []
+        val_acc_list = []
+
+        parameter_list = all_parameters[idx]
+        for parameter in parameter_list:
+            print('<--------- {}: {} --------->'.format(variable, parameter))
+
+            if variable == 'dimensions':
+                settings.size = parameter
+            elif variable == 'architectures':
+                settings.architecture = parameter
+            elif variable == 'rotations':
+                settings.rotation_range = parameter
+                settings.num_samples = 1000
+            elif variable == 'classes':
+                settings.num_classes = parameter
+            elif variable == 'samples':
+                settings.num_samples = parameter
+            elif variable == 'randomness':
+                settings.randomize_fraction = parameter
+
+            _, val_acc, train_time = train_model(settings)
+            val_acc_list.append(val_acc)
+            train_time_list.append(train_time)
+
+        save_train_data(variable, val_acc_list, train_time_list)
+
+
 if __name__ == "__main__":
     settings = Settings()
-    train_time_list = []
-    val_acc_list = []
-    settings.input_dir = 'dataset22May'
-    settings.output_dir = 'outputRandomness'
-    settings.num_samples = 3000
+    variables = ['dimensions', 'architectures', 'rotations', 'classes', 'samples', 'randomness']
+    parameters = [
+        [(120, 120), (96, 96), (64, 64), (32, 32), (16, 16)],  # pixels
+        [1, 2, 3, 4, 5, 6, 7],  # architecture num
+        [0, 1, 2, 3, 4, 5, 10, 20, 30],  # degrees rotation
+        [2, 4, 6, 8, 10, 12],  # num of classes
+        [150, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000, 'all'],  # samples
+        [0, 1, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]  # fraction randomness
+    ]
 
-    print('Input dimensions')
-    size_list = [(120, 120), (96, 96), (64, 64), (32, 32), (16, 16)]
-    for size in size_list:
-        print('<--------- DIMENSION: {} px --------->'.format(size[0]))
-        settings.size = size
-        _, val_acc, train_time = train_model(settings)
-        val_acc_list.append(val_acc)
-        train_time_list.append(train_time)
+    for i in range(10):
+        output_folder = 'output_run{}'.format(i)
+        iterate_over_variables(variables, parameters, output_folder)
 
-    save_train_data(val_acc_list, train_time_list)
-    train_time_list = []
-    val_acc_list = []
-    settings.size = (96, 96)
-
-    total_architectures = 7
-    print('Architectures')
-    for architecture_num in range(total_architectures):
-        print('<--------- ARCHITECTURE: {} --------->'.format(architecture_num))
-        settings.architecture = architecture_num
-        _, val_acc, train_time = train_model(settings)
-        val_acc_list.append(val_acc)
-        train_time_list.append(train_time)
-
-    save_train_data(val_acc_list, train_time_list)
-    train_time_list = []
-    val_acc_list = []
-
-    settings.architecture = 0
-
-    print('Rotations')
-    rotation_list = [0, 1, 2, 3, 4, 5]
-    settings.num_samples = 1000
-    for rotation in rotation_list:
-        print('<--------- ROTATION: {} deg --------->'.format(rotation))
-        settings.rotation_range = rotation
-        _, val_acc, train_time = train_model(settings)
-        val_acc_list.append(val_acc)
-        train_time_list.append(train_time)
-
-    save_train_data(val_acc_list, train_time_list)
-    train_time_list = []
-    val_acc_list = []
-    settings.num_samples = 'all'
-    settings.rotation_range = 0
-
-    print('Num of output classes')
-    class_list = [2, 4, 6, 8, 10, 12]
-    for num_classes in class_list:
-        print('<--------- NUMBER OF CLASSES: {} --------->'.format(num_classes))
-        settings.num_classes = num_classes
-        _, val_acc, train_time = train_model(settings)
-        val_acc_list.append(val_acc)
-        train_time_list.append(train_time)
-
-    save_train_data(val_acc_list, train_time_list)
-    train_time_list = []
-    val_acc_list = []
-
-    settings.num_classes = 6
-
-    print('Num of samples')
-    sample_list = [150, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000, 'all']
-    for num_samples in sample_list:
-        print('<--------- ITERATION: {} samples --------->'.format(num_samples))
-        settings.num_samples = num_samples
-        _, val_acc, train_time = train_model(settings)
-        val_acc_list.append(val_acc)
-        train_time_list.append(train_time)
-
-    save_train_data(val_acc_list, train_time_list)
-    settings.num_samples = 3000
-
-    print('Human Randomizer')
-    fraction_list = [0]
-    for fraction in fraction_list:
-        print('<--------- FRACTION: {} --------->'.format(fraction))
-        settings.randomize_fraction = fraction
-        _, val_acc, train_time = train_model(settings)
-        val_acc_list.append(val_acc)
-        train_time_list.append(train_time)
-
-    save_train_data(val_acc_list, train_time_list)
+    """ Test if settings tranfers well to randomize resolutions functoin """
