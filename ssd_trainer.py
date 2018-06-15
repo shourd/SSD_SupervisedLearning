@@ -10,7 +10,6 @@ import numpy as np
 import matplotlib.pylab as plt
 import ssd_dataloader
 from os import environ, path, makedirs
-import shutil
 import pickle
 import time
 import seaborn as sns
@@ -22,6 +21,7 @@ class Settings:
     def __init__(self):
         self.input_dir          = 'dataset22May'
         self.output_dir         = 'output'
+        self.test_dir           = 'test_data_filtered'
         self.model_name         = 'model'
         self.variable_name      = ''
         self.epochs             = 25
@@ -101,8 +101,8 @@ def train_model(settings):
         y_train = y_train[0:settings.num_samples, :]
 
     """" Make certain amount of resolutions random """
-    y_train = randomize_resolutions(y_train, settings.randomize_fraction)
-    y_test = randomize_resolutions(y_test, settings.randomize_fraction)
+    y_train = randomize_resolutions(y_train, settings.randomize_fraction, settings)
+    y_test = randomize_resolutions(y_test, settings.randomize_fraction, settings)
 
     ''' CREATING THE CNN '''
 
@@ -210,12 +210,12 @@ def train_model(settings):
 
     # For debugging purposes. Exports augmented image data
     export_dir = None
-    if export_dir is not None:
-        try:
-            makedirs(export_dir)
-        except FileExistsError:
-            shutil.rmtree(export_dir)
-            makedirs(export_dir)
+    # if export_dir is not None:
+    #     try:
+    #         makedirs(export_dir)
+    #     except FileExistsError:
+    #         shutil.rmtree(export_dir)
+    #         makedirs(export_dir)
 
     train_datagen = ImageDataGenerator(
         rotation_range=settings.rotation_range,
@@ -247,9 +247,9 @@ def train_model(settings):
     test_loss = round(score[0], 3)
     test_accuracy = round(score[1], 3)
     train_time = int(time.time() - start_time)
-    print('Train time: {}s'.format(train_time))
-    print('Test loss:', test_loss)
-    print('Test accuracy:', test_accuracy)
+    # print('Train time: {}s'.format(train_time))
+    # print('Test loss:', test_loss)
+    # print('Test accuracy:', test_accuracy)
 
     """ SAVING MODEL AND RESULTS """
 
@@ -278,7 +278,7 @@ def train_model(settings):
     return model, test_accuracy, train_time
 
 
-def save_train_data(var_name, val_acc_list, train_time_list):
+def save_train_data(var_name, train_time_list, val_acc_list, test_acc_list):
     output_dir = 'CSV_output'
     if not path.exists(output_dir):
         makedirs(output_dir)
@@ -288,9 +288,14 @@ def save_train_data(var_name, val_acc_list, train_time_list):
         f.write(",".join(map(str, train_time_list)))
         f.write("\n")
 
-        filename = '{}/val_acc_{}.csv'.format(output_dir, var_name)
+    filename = '{}/val_acc_{}.csv'.format(output_dir, var_name)
     with open(filename, 'a') as f:
         f.write(",".join(map(str, val_acc_list)))
+        f.write("\n")
+
+    filename = '{}/test_acc_{}.csv'.format(output_dir, var_name)
+    with open(filename, 'a') as f:
+        f.write(",".join(map(str, test_acc_list)))
         f.write("\n")
 
 
@@ -300,12 +305,12 @@ def unison_shuffled_copies(a, b):
     return a[p], b[p]
 
 
-def randomize_resolutions(reso_data, fraction_random):
+def randomize_resolutions(reso_data, fraction_random, settings):
     cap = int(fraction_random * len(reso_data))
     if fraction_random > 0:
         for idx, resolution in enumerate(reso_data):
             if idx < cap:
-                print('debug randomize: ',settings.num_classes)
+                print('debug randomize: ', settings.num_classes)
                 reso_data[idx] = np.zeros(settings.num_classes + 1)  # Set all resos to 0
                 reso_data[idx][np.random.randint(settings.num_classes+1)] = 1  # set a random reso to 1
 
@@ -319,8 +324,10 @@ def iterate_over_variables(variable_names, all_parameters, output_dir):
         settings = Settings()  # reset all settings
         settings.output_dir = output_dir
         settings.variable_name = variable
+        x_test, y_test = load_test_data(settings)
         train_time_list = []
         val_acc_list = []
+        test_acc_list = []
 
         parameter_list = all_parameters[idx]
         for parameter in parameter_list:
@@ -328,6 +335,7 @@ def iterate_over_variables(variable_names, all_parameters, output_dir):
 
             if variable == 'dimensions':
                 settings.size = parameter
+                x_test, y_test = load_test_data(settings)
             elif variable == 'architectures':
                 settings.architecture = parameter
             elif variable == 'rotations':
@@ -340,11 +348,52 @@ def iterate_over_variables(variable_names, all_parameters, output_dir):
             elif variable == 'randomness':
                 settings.randomize_fraction = parameter
 
-            _, val_acc, train_time = train_model(settings)
-            val_acc_list.append(val_acc)
-            train_time_list.append(train_time)
+            model, val_acc, train_time = train_model(settings)
+            test_acc = evaluate_model(model, x_test, y_test)
 
-        save_train_data(variable, val_acc_list, train_time_list)
+            train_time_list.append(train_time)
+            val_acc_list.append(val_acc)
+            test_acc_list.append(test_acc)
+
+            print('Training time:', train_time)
+            print('Validation accuracy:', val_acc)
+            print('Test accuracy:', test_acc)
+
+        save_train_data(variable, train_time_list, val_acc_list, test_acc_list)
+
+
+def load_test_data(settings):
+    """ Start loading TEST SSD and Resolution data """
+    filename = 'test_data_{}px.pickle'.format(settings.size[0])
+    try:
+        x_test, y_test = pickle.load(open(filename, "rb"))
+        print('Data loaded from Pickle')
+    except FileNotFoundError:
+        print('Start loading data.')
+        x_test = ssd_dataloader.load_ssd(settings.size, settings.test_dir)
+        print('SSDs loaded. Start loading resolutions.')
+        y_test = ssd_dataloader.load_resos(settings.test_dir)
+        pickle.dump([x_test, y_test], open(filename, "wb"))
+        print('Data saved to disk.')
+
+    y_test = np.clip(y_test, -settings.max_reso, settings.max_reso)
+    reso_resolution = 2 * settings.max_reso / settings.num_classes
+    y_test = np.round((y_test + settings.max_reso) / reso_resolution, 0)
+    y_test = keras.utils.to_categorical(y_test, settings.num_classes + 1)  # creates (samples, num_categories) array
+
+    # settings.num_samples = 500
+    # x_test = x_test[0:settings.num_samples, :, :, :]
+    # y_test = y_test[0:settings.num_samples, :]
+
+    return x_test, y_test
+
+
+def evaluate_model(model, x_test, y_test):
+    model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
+    score = model.evaluate(x_test, y_test, verbose=1, batch_size=128)
+    test_accuracy = round(score[1], 3)
+
+    return test_accuracy
 
 
 if __name__ == "__main__":

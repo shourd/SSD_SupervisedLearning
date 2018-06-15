@@ -191,8 +191,7 @@ def plot_valtest_data(plot_name, dir_name, figsize):
 
 
 if __name__ == "__main__":
-    # plot_names = ['dimensions', 'architectures', 'rotations', 'classes', 'samples', 'randomness']
-    plot_names = ['randomness']
+    plot_names = ['dimensions', 'architectures', 'rotations', 'classes', 'samples', 'randomness']
     dir_name = 'output6juni/'
     figsize = (5, 4)
 
