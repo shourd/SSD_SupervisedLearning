@@ -24,18 +24,18 @@ class Settings:
         self.test_dir           = 'test_data_filtered'
         self.model_name         = 'model'
         self.variable_name      = ''
-        self.epochs             = 25
+        self.epochs             = 30
         self.train_val_ratio    = 0.8
         self.batch_size         = 128
-        self.steps_per_epoch    = 3000 / 128
-        self.num_samples        = 3000              # the amount of SSDs to use for training [Integer or 'all']
+        self.steps_per_epoch    = 5900 / 128
+        self.num_samples        = 'all'              # the amount of SSDs to use for training [Integer or 'all']
         self.rotation_range     = 0                 # the maxium degree of random rotation for data augmentation
         self.size               = 96, 96            # the pixel dimensions of imported SSDs
         self.num_classes        = 6                 # amount of resolution classes (2, 4, 6, or 12)
         self.max_reso           = 30                # [deg] larger resolutions will be clipped.
-        self.architecture       = 0                 # The standard architecture
-        self.randomize_fraction = 0                 # Randomize fraction of samples to simulate human randomness
-        self.save_model         = True              # save trained model to disk
+        self.architecture       = 3                 # The standard architecture
+        self.randomize_fraction = 0                # Randomize percentage of samples to simulate human randomness
+        self.save_model         = False              # save trained model to disk
         self.reload_data        = False             # load data from Pickle [False] or from raw SSDs [True]
 
 
@@ -44,7 +44,7 @@ def train_model(settings):
     """ Start loading SSD and Resolution data """
     input_shape = (settings.size[0], settings.size[1], 1)
     ratio_int = int(settings.train_val_ratio * 100)
-    fraction_print = int(settings.randomize_fraction * 100)
+    fraction_print = int(settings.randomize_fraction)
     iteration_name = '{}c_{}s_{}px_{}deg_{}a_{}f'.format(
         settings.num_classes,
         settings.num_samples,
@@ -87,13 +87,13 @@ def train_model(settings):
     # y_data = (y_data > 0).astype(int)  # convert positive headings to 1, negative headings to 0.
     y_data = keras.utils.to_categorical(y_data, settings.num_classes + 1)  # creates (samples, num_categories) array
 
-    # Split train and test data
+    # Split train and val data
     train_length = int(settings.train_val_ratio * len(x_data))
     x_train = x_data[0:train_length, :, :, :]
-    x_test = x_data[train_length:, :, :, :]
+    x_val = x_data[train_length:, :, :, :]
 
     y_train = y_data[0:train_length, :]
-    y_test = y_data[train_length:, :]
+    y_val = y_data[train_length:, :]
 
     # Define length of data set to be used
     if settings.num_samples is not 'all':
@@ -102,12 +102,12 @@ def train_model(settings):
 
     """" Make certain amount of resolutions random """
     y_train = randomize_resolutions(y_train, settings.randomize_fraction, settings)
-    y_test = randomize_resolutions(y_test, settings.randomize_fraction, settings)
+    y_val = randomize_resolutions(y_val, settings.randomize_fraction, settings)
 
     ''' CREATING THE CNN '''
 
-    data_length = len(x_train)+len(x_test)
-    print('Amount of SSDs: {} ({} train / {} val)'.format(data_length, len(x_train), len(x_test)))
+    data_length = len(x_train)+len(x_val)
+    print('Amount of SSDs: {} ({} train / {} val)'.format(data_length, len(x_train), len(x_val)))
 
     model = Sequential()
 
@@ -115,7 +115,7 @@ def train_model(settings):
 
     """" ARCHITECTURES WITH TYPES OF LAYERS. Varies with input size """
     # BASELINE ARCHITECTURE
-    if settings.architecture == 0:
+    if settings.architecture == 1:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         if settings.size[0] > 32:
             model.add(MaxPooling2D(pool_size=(4, 4)))
@@ -124,21 +124,23 @@ def train_model(settings):
             model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # smaller pooling layer
-    if settings.architecture == 1:
+    if settings.architecture == 2:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # larger 1st conv filter
-    if settings.architecture == 2:
+    if settings.architecture == 3:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(4, 4)))
+        if settings.size[0] > 32:
+            model.add(MaxPooling2D(pool_size=(4, 4)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        if settings.size[0] > 16:
+            model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # larger 2nd conv filter
-    if settings.architecture == 3:
+    if settings.architecture == 4:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(2, 2), activation='relu'))
@@ -146,12 +148,12 @@ def train_model(settings):
 
     """" ARCHITECTURES WITH DIFFERENT AMOUNT OF LAYERS """
     # only one layer
-    if settings.architecture == 4:
+    if settings.architecture == 5:
         model.add(Conv2D(64, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
 
     # one layer combo added to archi_1
-    if settings.architecture == 5:
+    if settings.architecture == 6:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
@@ -160,7 +162,7 @@ def train_model(settings):
         model.add(MaxPooling2D(pool_size=(2, 2)))
 
     # two layer combos acdded to archi_1
-    if settings.architecture == 6:
+    if settings.architecture == 7:
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Conv2D(32, kernel_size=(5, 5), strides=(1, 1), activation='relu'))
@@ -178,6 +180,7 @@ def train_model(settings):
 
     # Output model structure to disk
     if not path.exists(settings.output_dir):
+        print('Output directory created')
         makedirs(settings.output_dir)
 
     plot_model(model, to_file='{}/model_structure_{}px_{}a.png'.format(
@@ -206,7 +209,10 @@ def train_model(settings):
     filepath = settings.output_dir + '/' + iteration_name + '.hdf5'
     checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
 
-    callbacks_list = [checkpoint, history]
+    if settings.save_model:
+        callbacks_list = [checkpoint, history]
+    else:
+        callbacks_list = [history]
 
     # For debugging purposes. Exports augmented image data
     export_dir = None
@@ -240,10 +246,10 @@ def train_model(settings):
         steps_per_epoch=settings.steps_per_epoch,  # len(x_train) / settings.batch_size,
         epochs=settings.epochs,
         verbose=1,
-        validation_data=(x_test, y_test),
+        validation_data=(x_val, y_val),
         callbacks=callbacks_list)
 
-    score = model.evaluate(x_test, y_test, verbose=0)
+    score = model.evaluate(x_val, y_val, verbose=0)
     test_loss = round(score[0], 3)
     test_accuracy = round(score[1], 3)
     train_time = int(time.time() - start_time)
@@ -306,11 +312,11 @@ def unison_shuffled_copies(a, b):
 
 
 def randomize_resolutions(reso_data, fraction_random, settings):
+    fraction_random /= 100
     cap = int(fraction_random * len(reso_data))
     if fraction_random > 0:
         for idx, resolution in enumerate(reso_data):
             if idx < cap:
-                print('debug randomize: ', settings.num_classes)
                 reso_data[idx] = np.zeros(settings.num_classes + 1)  # Set all resos to 0
                 reso_data[idx][np.random.randint(settings.num_classes+1)] = 1  # set a random reso to 1
 
@@ -340,9 +346,10 @@ def iterate_over_variables(variable_names, all_parameters, output_dir):
                 settings.architecture = parameter
             elif variable == 'rotations':
                 settings.rotation_range = parameter
-                settings.num_samples = 1000
+                settings.num_samples = 300
             elif variable == 'classes':
                 settings.num_classes = parameter
+                x_test, y_test = load_test_data(settings)
             elif variable == 'samples':
                 settings.num_samples = parameter
             elif variable == 'randomness':
@@ -389,7 +396,7 @@ def load_test_data(settings):
 
 
 def evaluate_model(model, x_test, y_test):
-    model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
+    # model.compile(loss=keras.losses.categorical_crossentropy, optimizer=keras.optimizers.Adam(), metrics=['accuracy'])
     score = model.evaluate(x_test, y_test, verbose=1, batch_size=128)
     test_accuracy = round(score[1], 3)
 
@@ -405,8 +412,10 @@ if __name__ == "__main__":
         [0, 1, 2, 3, 4, 5, 10, 20, 30],  # degrees rotation
         [2, 4, 6, 8, 10, 12],  # num of classes
         [150, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000, 'all'],  # samples
-        [0, 1, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]  # fraction randomness
+        [0, 1, 5, 10, 15, 20, 30, 100]  # fraction randomness
     ]
+
+    # ask to remove previous data
 
     for i in range(10):
         output_folder = 'output_run{}'.format(i)

@@ -115,91 +115,120 @@ def plot_val_data(plot_name, dir_name, figsize):
     print('Validation figure saved to {}'.format(dir_name + output_file))
 
 
-def plot_valtest_data(plot_name, dir_name, figsize):
-    filename_val = 'val_acc_list.csv'
+def plot_all_data(plot_name, dir_name, parameters):
+    filename_val = 'val_acc_{}.csv'.format(plot_name)
     filename_test = 'test_acc_{}.csv'.format(plot_name)
+    filename_time = 'train_time_{}.csv'.format(plot_name)
     plot_title = ''
     output_file = 'comb_acc_{}.pdf'.format(plot_name)
-    markersize = 12
-    alpha = 1  # transparency of the markers
+    output_file_time = 'train_time_{}.pdf'.format(plot_name)
+    figsize = (5, 4)
 
-    filepath = dir_name + filename_val
-    with open(filepath, 'r') as file:
-        content_val = file.readlines()
+    df_val = pd.read_csv(dir_name + filename_val, header=None)
+    df_test = pd.read_csv(dir_name + filename_test, header=None)
+    df = pd.concat([df_val, df_test], keys=['val', 'test'], names=['set'])
 
-    filepath = dir_name + filename_test
-    with open(filepath, 'r') as file:
-        content_test = file.readlines()
+    df_time = pd.read_csv(dir_name + filename_time, header=None)
 
     # x-axis
     if plot_name == 'classes':
-        x_data = [2, 4, 6, 8, 10, 12]
+        x_data = parameters[3]
         xlabel = 'Classes'
-        y_data_val = content_val[3]
 
     elif plot_name == 'dimensions':
-        x_data = [120, 96, 64, 32, 16]
+        x_data = parameters[0]
         xlabel = 'Input dimensions (px x px)'
-        y_data_val = content_val[0]
 
     elif plot_name == 'rotations':
-        x_data = [0, 1, 2, 3, 4, 5]
+        x_data = parameters[2]
         xlabel = 'Maximum rotation during augmentation'
-        y_data_val = content_val[2]
 
     elif plot_name == 'architectures':
-        x_data = [1, 2, 3, 4, 5, 6, 7]
+        x_data = parameters[1]
         xlabel = 'Architecture number'
-        y_data_val = content_val[1]
 
     elif plot_name == 'samples':
-        x_data = [150, 300, 500, 1000, 1500, 2000, 3000, 6000]
+        x_data = parameters[4]
         xlabel = 'Input samples'
-        y_data_val = content_val[4]
 
     elif plot_name == 'randomness':
-        x_data = [0, 1, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        x_data = parameters[5]
         xlabel = '% randomized resolutions'
-        y_data_val = content_val[5]
 
-    y_data_test = content_test[0]
+    df_val.columns = x_data
+    df_test.columns = x_data
+    df_time.columns = x_data
+    df.columns = x_data
 
-    y_data_val = y_data_val.split(',')
-    last_item = len(y_data_val) - 1
-    y_data_val[last_item] = y_data_val[last_item].replace("\n", "") # remove \n
-    y_data_val = list(filter(None, y_data_val))  # remove empty items
-    y_data_val = [float(i) for i in y_data_val]
-
-    y_data_test = y_data_test.split(',')
-    last_item = len(y_data_test) - 1
-    y_data_test[last_item] = y_data_test[last_item].replace("\n", "")
-    y_data_test = [float(i) for i in y_data_test]
+    df = df.stack().to_frame().reset_index()
+    df.columns = ['set', 'run', 'x_data', 'accuracy']
 
     plt.figure(figsize=figsize)
-    val_set = plt.scatter(x_data, y_data_val, s=markersize, alpha=alpha)
-    test_set = plt.scatter(x_data, y_data_test, s=markersize, alpha=alpha)
-    plt.clabel(val_set, inline=1, fontsize=10)
-    plt.show()
-    plt.xlabel(xlabel)
-    plt.ylabel('Accuracy')
-    plt.title(plot_title)
-    plt.ylim(0, 1)
-    labels = ['Validation set', 'Test set']
-    plt.legend((val_set, test_set), labels, loc='lower right')
+    # ax = sns.swarmplot(data=df, x='x_data', y='accuracy', hue='set')
+    # ax = sns.violinplot(data=df, x='x_data', y='accuracy', hue='set')
+    # ax = sns.boxplot(data=df, x='x_data', y='accuracy', hue='set')
+
+    ax = sns.stripplot(
+        data=df,
+        x='x_data',
+        y='accuracy',
+        hue='set',
+        jitter=0.03,
+        size=3,
+        alpha=0.7
+    )
+
+    ax.set(
+        xlabel=xlabel,
+        ylabel='Accuracy',
+        ylim=(0, 1),
+        title=plot_title
+    )
+
+    ax.legend_.set_title('')
+    ax.legend_._loc = 4
+    ax.legend_.texts[0]._text = 'Validation'
+    ax.legend_.texts[1]._text = 'Test'
+
     plt.savefig(dir_name + output_file, format='pdf', dpi=1000, bbox_inches='tight')
     print('Combination figure saved to {}'.format(dir_name + output_file))
+
+    """ PLOT TIME """
+    plt.figure(figsize=figsize)
+    ax = sns.stripplot(
+        data=df_time,
+        jitter=0.03,
+        size=3,
+        alpha=0.7
+    )
+
+    ax.set(
+        xlabel=xlabel,
+        ylabel='Train time [s]',
+        title=plot_title
+    )
+    plt.savefig(dir_name + output_file_time, format='pdf', dpi=1000, bbox_inches='tight')
+    print('Train time figure saved to {}'.format(dir_name + output_file_time))
 
 
 if __name__ == "__main__":
     plot_names = ['dimensions', 'architectures', 'rotations', 'classes', 'samples', 'randomness']
-    dir_name = 'output6juni/'
+    dir_name = '180624/'
     figsize = (5, 4)
 
-    for plot_name in plot_names:
-        plot_acc_data(plot_name, dir_name, figsize)
-        # plot_val_data(plot_name, dir_name, figsize)
-        # plot_valtest_data(plot_name, dir_name, figsize)
+    parameters = [
+        [120, 96, 64, 32, 16],  # pixels
+        [1, 2, 3, 4, 5, 6, 7],  # architecture num
+        [0, 1, 2, 3, 4, 5, 10, 20, 30],  # degrees rotation
+        [2, 4, 6, 8, 10, 12],  # num of classes
+        [150, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000, 5900],  # samples
+        [0, 1, 5, 10, 15, 20, 30, 50, 100]  # fraction randomness
+    ]
 
+    for plot_name in plot_names:
+        # plot_acc_data(plot_name, dir_name, figsize)
+        # plot_val_data(plot_name, dir_name, figsize)
+        plot_all_data(plot_name, dir_name, parameters)
 
 # ARCHITECTURES 1
 # labels = ['64 CONV, 2x2 POOL',
